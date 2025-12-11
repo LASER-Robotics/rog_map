@@ -62,7 +62,7 @@ Visualization Manager:
     - Class: rviz_common/Group
       Displays:
         - Class: rviz_default_plugins/MarkerArray
-          Enabled: false
+          Enabled: true
           Marker Topic: /uav1/rog_map/map_bound
           Name: Map Bound
           Namespaces:
@@ -120,7 +120,12 @@ Visualization Manager:
           Size (Pixels): 4
           Size (m): 0.10000000149011612
           Style: Boxes
-          Topic: /uav1/rog_map/occ
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            History Policy: Keep All
+            Reliability Policy: Best Effort
+            Value: /uav1/rog_map/occ
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -489,7 +494,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: world
+    Fixed Frame: uav1/map 
     Frame Rate: 30
   Name: root
   Tools:
