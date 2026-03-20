@@ -1,6 +1,6 @@
 rog_map:
   resolution: 0.1
-  inflation_resolution: 0.2
+  inflation_resolution: 0.1
   inflation_step: 1
   unk_inflation_en: false
   unk_inflation_step: 1
@@ -18,7 +18,7 @@ rog_map:
   map_sliding:
     enable: true
     # The minimum distance [m] to slide the map.
-    threshold: 0.3
+    threshold: 0.1
 
   esdf:
     enable: false
@@ -30,6 +30,7 @@ rog_map:
   #  else user should call function [updateMap] to update the map.
   ros_callback:
     enable: true
+    # cloud_topic: "/uav1/livox_up/lidar"
     cloud_topic: "/uav1/livox/lidar"
     odom_topic: "/uav1/estimation_manager/estimation"
     odom_timeout: 2.0
@@ -63,7 +64,7 @@ rog_map:
     batch_update_size: 1
     local_update_box: [ 50,50,5 ]
     # The range of raycasting [m].
-    ray_range: [ 0.0, 15 ]
+    ray_range: [ 0.2, 70 ]
 
     p_min: 0.12
     p_miss: 0.49

@@ -51,16 +51,16 @@ rog_map:
   #  else user should call function [updateMap] to update the map.
   ros_callback:
     enable: true
-    # cloud_topic: "/uav1/livox/lidar"
-    cloud_topic: "/uav1/fast_lio/laser_map"
-    # odom_topic: "/uav1/estimation_manager/estimation"
-    odom_topic: "/uav1/fast_lio/odometry"
+    cloud_topic: "/uav1/livox/lidar"
+    # cloud_topic: "/uav1/fast_lio/laser_map"
+    odom_topic: "/uav1/estimation_manager/estimation"
+    # odom_topic: "/uav1/fast_lio/odometry"
     odom_timeout: 2.0
 
   visualization:
     enable: true
     # when enabled, use rqt_reconfigure to change the visualization parameters.
-    use_dynamic_reconfigure: false
+    use_dynamic_reconfigure: true
     # The rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.
     time_rate: 10
     # The frame rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.

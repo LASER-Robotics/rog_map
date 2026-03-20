@@ -1,12 +1,13 @@
 name: simulation
 root: ./
-startup_window: tui
+startup_window: rog_map
+# pre_window: export UAV_NAME=uav1; export UAV_TYPE=x500
 pre_window: export UAV_NAME=uav1; export UAV_TYPE=lr7pro
 windows:
   - spawn:
       layout: even-horizontal
       panes:
-        - ros2 launch laser_uav_simulation gazebo.launch.py real_time:=1.0 #world:=forest
+        - ros2 launch laser_uav_simulation gazebo.launch.py real_time:=1.0 world:=forest
         - ros2 launch laser_uav_simulation spawn_drones.launch.py spawn_drones_file:=./configs/spawn.yaml
   - api:
       layout: even-horizontal
@@ -35,5 +36,6 @@ windows:
   - rog_map:
       layout: even-horizontal
       panes:
-        - sleep 3; ros2 launch rog_map run_rog_map.launch.py
+        - sleep 3; ros2 launch rog_map run_rog_map.launch.py rog_map_config:=ogm_map.yaml
+        - ros2 run rviz_republisher rviz_republisher
 
