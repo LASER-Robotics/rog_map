@@ -29,6 +29,9 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <visualization_msgs/msg/marker_array.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
 
 #include <rog_map/rog_map.h>
 #include <super_utils/color_msg_utils.hpp>
@@ -50,6 +53,8 @@ namespace rog_map {
         };
 
         std::string namespace_;
+        std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+        std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
         struct VisualizeMap {
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
@@ -105,8 +110,20 @@ namespace rog_map {
                 std::cout << YELLOW << " -- [ROS] Odom timeout, skip cloud callback." << RESET << std::endl;
                 return;
             }
+
+/* Laser Robotics //{ */
+            sensor_msgs::msg::PointCloud2 cloud_transformed;
+            try {
+              auto transform = tf_buffer_->lookupTransform(cfg_.target_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp);
+              tf2::doTransform(*cloud_msg, cloud_transformed, transform);
+            } catch (const tf2::TransformException &e) {
+              RCLCPP_WARN(nh_->get_logger(), "TF error: %s", e.what());
+              return;
+            }
+//}
+
             PointCloud temp_pc;
-            pcl::fromROSMsg(*cloud_msg, temp_pc);
+            pcl::fromROSMsg(cloud_transformed, temp_pc);
             rc_.updete_lock.lock();
             rc_.pc = temp_pc;
             rc_.pc_pose = std::make_pair(robot_state_.p, robot_state_.q);
@@ -307,6 +324,9 @@ namespace rog_map {
 
             nh_->declare_parameter("uav_name", rclcpp::ParameterType::PARAMETER_STRING);
             nh_->get_parameter("uav_name", namespace_);
+
+            tf_buffer_ = std::make_shared<tf2_ros::Buffer>(nh_->get_clock());
+            tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
             cfg_ = rog_map::Config(cfg_path);
             // 创建 TransformBroadcaster

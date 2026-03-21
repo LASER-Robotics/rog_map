@@ -28,7 +28,8 @@ set(DEPENDENCIES
   visualization_msgs
   pcl_conversions
   tf2_ros
-  )
+  tf2_sensor_msgs
+)
 
 foreach(DEP IN LISTS DEPENDENCIES)
   find_package(${DEP} REQUIRED)

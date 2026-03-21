@@ -79,6 +79,15 @@ namespace rog_map {
 #endif
 #endif
 
+            
+/* Laser Robotics params //{ */
+            loader.LoadParam(name_space + "/ros_callback/target_frame", target_frame, std::string("target_frame"));
+//}
+
+
+
+
+
             loader.LoadParam(name_space + "/esdf/resolution", esdf_resolution, 0.2);
             loader.LoadParam(name_space + "/esdf/enable", esdf_en, false);
             vector<double> temp_esdf_update_box;
@@ -286,6 +295,9 @@ namespace rog_map {
                 return a.x() * a.x() + a.y() * a.y() + a.z() * a.z() < b.x() * b.x() + b.y() * b.y() + b.z() * b.z();
             });
         }
+
+
+        std::string target_frame;
 
         // add 24.07.18 add esdf
         bool esdf_en{false};
