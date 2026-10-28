@@ -113,7 +113,7 @@ namespace rog_map {
             try {
                 const auto transform = tf_buffer_->lookupTransform(
                     cfg_.target_frame, cloud_msg->header.frame_id,
-                    tf2_ros::fromRclcpp(rclcpp::Time(cloud_msg->header.stamp)));
+                    rclcpp::Time(cloud_msg->header.stamp), rclcpp::Duration::from_seconds(0.05));
                 tf2::doTransform(*cloud_msg, cloud_transformed, transform);
             } catch (const tf2::TransformException &e) {
                 RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 2000,
@@ -316,7 +316,8 @@ namespace rog_map {
                                   .durability_volatile());
 
             tf_buffer_ = std::make_shared<tf2_ros::Buffer>(nh_->get_clock());
-            tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, nh_, false);
+            // TF must keep spinning while a cloud waits for its timestamped transform.
+            tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, nh_);
 
             cfg_ = rog_map::Config(cfg_path);
             if (!cfg_.ros_callback_en && cfg_.target_frame.empty()) {

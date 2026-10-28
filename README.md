@@ -11,9 +11,11 @@ Input topics are relative to the UAV namespace.
 
 `rog_map.ros_callback.target_frame` defaults to the first valid odometry frame.
 If set explicitly, it must match the odometry frame. Point clouds are transformed
-at their message timestamp using TF before insertion. Clouds without a matching
-transform and odometry with a different frame are rejected. All map clouds and
-markers use that same frame; ROG-Map does not broadcast a transform to `fcu`.
+at their message timestamp using TF before insertion. A dedicated TF listener
+allows clouds to wait up to 50 ms of ROS time for a slightly delayed transform.
+Clouds without a matching transform and odometry with a different frame are
+rejected. All map clouds and markers use that same frame; ROG-Map does not
+broadcast a transform to `fcu`.
 
 SUPER links the exported `rog_map_lib` library and includes
 `rog_map_ros/rog_map_ros.hpp`. It embeds the map, so a separate mapping component

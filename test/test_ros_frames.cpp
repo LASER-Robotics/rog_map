@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 #include <rog_map_ros/rog_map_ros.hpp>
 #include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/transform_broadcaster.h>
 
 #include <chrono>
 #include <filesystem>
+#include <future>
 #include <thread>
 #include <unistd.h>
 
@@ -140,6 +142,35 @@ TEST_F(MapFrames, AcceptsCloudAlreadyInOdometryFrame) {
         cloud("uav7/odometry");
         return map->isOccupied(rog_map::Vec3f(1, 0, 0));
     }));
+}
+
+TEST_F(MapFrames, WaitsForTransformArrivingAfterCloud) {
+    makeMap();
+    odometry();
+    ASSERT_TRUE(spinUntil([&] { return map->getRobotState().rcv; }));
+
+    tf2_ros::TransformBroadcaster broadcaster(node);
+    geometry_msgs::msg::TransformStamped transform;
+    transform.header.frame_id = "uav7/odometry";
+    transform.child_frame_id = "uav7/lidar";
+    transform.header.stamp = node->now() - rclcpp::Duration::from_seconds(0.1);
+    transform.transform.translation.x = 1.125;
+    transform.transform.translation.y = transform.transform.translation.z = 0.125;
+    transform.transform.rotation.w = 1.0;
+    broadcaster.sendTransform(transform);
+    cloud("uav7/lidar");
+
+    auto delayed_tf = std::async(std::launch::async, [&] {
+        std::this_thread::sleep_for(10ms);
+        transform.header.stamp = node->now();
+        broadcaster.sendTransform(transform);
+    });
+    const bool updated = spinUntil([&] {
+        return map->isOccupied(rog_map::Vec3f(2.125, 0.125, 0.125));
+    });
+    delayed_tf.get();
+    EXPECT_TRUE(updated);
+    EXPECT_FALSE(map->isOccupied(rog_map::Vec3f(1, 0, 0)));
 }
 
 TEST_F(MapFrames, RejectsMissingTransform) {
