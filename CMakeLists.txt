@@ -23,6 +23,7 @@ set(DEPENDENCIES
   rclcpp
   rclcpp_components
   std_msgs
+  sensor_msgs
   nav_msgs
   geometry_msgs
   visualization_msgs
@@ -35,9 +36,13 @@ foreach(DEP IN LISTS DEPENDENCIES)
   find_package(${DEP} REQUIRED)
 endforeach()
 
+find_package(PCL REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(yaml-cpp REQUIRED)
+
 set(includes
   include
-  ${Eigen_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   )
 
@@ -83,14 +88,22 @@ target_link_libraries(rog_map_lib
   ${THIRDPARTY_LIBRARIES}
   )
 
+target_include_directories(rog_map_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+  )
+
 install(TARGETS rog_map_lib
   EXPORT export_${PROJECT_NAME}
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
-  PUBLIC_HEADER DESTINATION include
   )
 
-ament_export_include_directories(include)
+install(DIRECTORY include/ DESTINATION include)
+
+ament_export_include_directories(include ${EIGEN3_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 ament_export_libraries(rog_map_lib)
 
 # Add composable node
@@ -106,7 +119,7 @@ target_link_libraries(run_rog_map
   )
 
 # Register component
-rclcpp_components_register_nodes(run_rog_map PLUGIN "rog_map::RunRogMap")
+rclcpp_components_register_nodes(run_rog_map "rog_map::RunRogMap")
 
 install(TARGETS run_rog_map
   EXPORT export_${PROJECT_NAME}
@@ -130,6 +143,15 @@ install(
   )
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
-ament_export_dependencies(${DEPENDENCIES})
+ament_export_dependencies(${DEPENDENCIES} PCL Eigen3 yaml-cpp)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_ros_frames test/test_ros_frames.cpp)
+  ament_target_dependencies(test_ros_frames ${DEPENDENCIES})
+  target_link_libraries(test_ros_frames rog_map_lib)
+  target_compile_definitions(test_ros_frames PRIVATE
+    TEST_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/default.yaml")
+endif()
 
 ament_package()

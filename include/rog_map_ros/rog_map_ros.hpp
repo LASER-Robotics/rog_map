@@ -27,7 +27,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <tf2_ros/transform_broadcaster.h>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -41,7 +40,7 @@ namespace rog_map {
 
     class ROGMapROS : public ROGMap {
         rclcpp::Node::SharedPtr nh_;
-        std::shared_ptr<tf2_ros::TransformBroadcaster> br_map_ego_;
+        rclcpp::CallbackGroup::SharedPtr callback_group_;
 
 
         const double getSystemWalltimeNow() override {
@@ -52,7 +51,6 @@ namespace rog_map {
             _in = nh_->get_clock()->now();
         };
 
-        std::string namespace_;
         std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
         std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
@@ -62,42 +60,42 @@ namespace rog_map {
                 occ_inf_pub, unknown_inf_pub, frontier_pub, esdf_pub;
             rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr mkr_arr_pub;
             rclcpp::TimerBase::SharedPtr viz_timer;
-            rclcpp::CallbackGroup::SharedPtr viz_reen_cbk_group;
         } vm_;
 
         struct ROSCallback {
-            rclcpp::CallbackGroup::SharedPtr odom_me_cbk_group, cloud_me_cbk_group, update_cbk_group;
             rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
             rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_sub;
             int unfinished_frame_cnt{0};
             Pose pc_pose;
             PointCloud pc;
             rclcpp::TimerBase::SharedPtr update_timer;
-            mutex updete_lock;
         } rc_;
 
         void odomCallback(const nav_msgs::msg::Odometry::SharedPtr odom_msg) {
-            updateRobotState(std::make_pair(Vec3f(odom_msg->pose.pose.position.x,
-                                                  odom_msg->pose.pose.position.y,
-                                                  odom_msg->pose.pose.position.z),
-                                            Quatf(odom_msg->pose.pose.orientation.w,
-                                                  odom_msg->pose.pose.orientation.x,
-                                                  odom_msg->pose.pose.orientation.y,
-                                                  odom_msg->pose.pose.orientation.z)));
-
-
-            geometry_msgs::msg::TransformStamped transformStamped;
-            transformStamped.header.stamp = nh_->get_clock()->now();
-            transformStamped.header.frame_id = namespace_ + "/map";
-            transformStamped.child_frame_id = namespace_ + "/fcu";
-            transformStamped.transform.translation.x = odom_msg->pose.pose.position.x;
-            transformStamped.transform.translation.y = odom_msg->pose.pose.position.y;
-            transformStamped.transform.translation.z = odom_msg->pose.pose.position.z;
-            transformStamped.transform.rotation.x = odom_msg->pose.pose.orientation.x;
-            transformStamped.transform.rotation.y = odom_msg->pose.pose.orientation.y;
-            transformStamped.transform.rotation.z = odom_msg->pose.pose.orientation.z;
-            transformStamped.transform.rotation.w = odom_msg->pose.pose.orientation.w;
-            br_map_ego_->sendTransform(transformStamped);
+            const Vec3f position(odom_msg->pose.pose.position.x,
+                                 odom_msg->pose.pose.position.y,
+                                 odom_msg->pose.pose.position.z);
+            const Quatf orientation(odom_msg->pose.pose.orientation.w,
+                                    odom_msg->pose.pose.orientation.x,
+                                    odom_msg->pose.pose.orientation.y,
+                                    odom_msg->pose.pose.orientation.z);
+            if (odom_msg->header.frame_id.empty() || !position.allFinite() ||
+                !orientation.coeffs().allFinite() || orientation.norm() < 1e-6) {
+                RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 2000,
+                                     "Rejected odometry with an empty frame or invalid pose");
+                return;
+            }
+            if (!cfg_.target_frame.empty() && odom_msg->header.frame_id != cfg_.target_frame) {
+                RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 2000,
+                                     "Rejected odometry frame '%s'; map frame is '%s'",
+                                     odom_msg->header.frame_id.c_str(), cfg_.target_frame.c_str());
+                return;
+            }
+            if (cfg_.target_frame.empty()) {
+                cfg_.target_frame = odom_msg->header.frame_id;
+                RCLCPP_INFO(nh_->get_logger(), "Map frame: %s", cfg_.target_frame.c_str());
+            }
+            updateRobotState(std::make_pair(position, orientation.normalized()));
         }
 
         void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg) {
@@ -111,25 +109,25 @@ namespace rog_map {
                 return;
             }
 
-/* Laser Robotics //{ */
             sensor_msgs::msg::PointCloud2 cloud_transformed;
             try {
-              auto transform = tf_buffer_->lookupTransform(cfg_.target_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp);
-              tf2::doTransform(*cloud_msg, cloud_transformed, transform);
+                const auto transform = tf_buffer_->lookupTransform(
+                    cfg_.target_frame, cloud_msg->header.frame_id,
+                    tf2_ros::fromRclcpp(rclcpp::Time(cloud_msg->header.stamp)));
+                tf2::doTransform(*cloud_msg, cloud_transformed, transform);
             } catch (const tf2::TransformException &e) {
-              RCLCPP_WARN(nh_->get_logger(), "TF error: %s", e.what());
-              return;
+                RCLCPP_WARN_THROTTLE(nh_->get_logger(), *nh_->get_clock(), 2000,
+                                     "Rejected cloud transform to '%s': %s",
+                                     cfg_.target_frame.c_str(), e.what());
+                return;
             }
-//}
 
             PointCloud temp_pc;
             pcl::fromROSMsg(cloud_transformed, temp_pc);
-            rc_.updete_lock.lock();
             rc_.pc = temp_pc;
             rc_.pc_pose = std::make_pair(robot_state_.p, robot_state_.q);
             rc_.unfinished_frame_cnt++;
             map_empty_ = false;
-            rc_.updete_lock.unlock();
         }
 
         void updateCallback() {
@@ -152,14 +150,9 @@ namespace rog_map {
                     " -- [ROG WARN] Unfinished frame cnt > 1, the map may not work in real-time" << RESET
                     << std::endl;
             }
-            static PointCloud temp_pc;
-            static Pose temp_pose;
-
-            rc_.updete_lock.lock();
-            temp_pc = rc_.pc;
-            temp_pose = rc_.pc_pose;
+            const PointCloud temp_pc = rc_.pc;
+            const Pose temp_pose = rc_.pc_pose;
             rc_.unfinished_frame_cnt = 0;
-            rc_.updete_lock.unlock();
 
             updateProbMap(temp_pc, temp_pose);
 
@@ -229,7 +222,7 @@ namespace rog_map {
                     PointCloud pc;
                     esdf_map_->getPositiveESDFPointCloud(box_min, box_max, robot_state_.p.z() - 0.5, pc);
                     pcl::toROSMsg(pc, cloud_msg);
-                    cloud_msg.header.frame_id = namespace_ + "/map";
+                    cloud_msg.header.frame_id = cfg_.target_frame;
                     cloud_msg.header.stamp = nh_->get_clock()->now();
                     vm_.esdf_pub->publish(cloud_msg);
                 }
@@ -309,7 +302,7 @@ namespace rog_map {
             }
             pcl::toROSMsg(pcl_cloud, cloud);
             cloud.header.stamp = nh_->get_clock()->now();
-            cloud.header.frame_id = namespace_ + "/map";
+            cloud.header.frame_id = cfg_.target_frame;
         }
 
     public:
@@ -322,15 +315,15 @@ namespace rog_map {
                                   .keep_last(1)
                                   .durability_volatile());
 
-            nh_->declare_parameter("uav_name", rclcpp::ParameterType::PARAMETER_STRING);
-            nh_->get_parameter("uav_name", namespace_);
-
             tf_buffer_ = std::make_shared<tf2_ros::Buffer>(nh_->get_clock());
-            tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+            tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, nh_, false);
 
             cfg_ = rog_map::Config(cfg_path);
-            // 创建 TransformBroadcaster
-            br_map_ego_ = std::make_shared<tf2_ros::TransformBroadcaster>(nh_);
+            if (!cfg_.ros_callback_en && cfg_.target_frame.empty()) {
+                cfg_.target_frame = cfg_.frame_id;
+            }
+            // Map updates and frame selection share state across all ROS callbacks.
+            callback_group_ = nh_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
             init();
             /// Initialize visualization module
@@ -352,11 +345,10 @@ namespace rog_map {
 
                 if (cfg_.viz_time_rate > 0) {
                     const int cbk_dt_ms = static_cast<int>(1.0 / cfg_.viz_time_rate * 1000);
-                    vm_.viz_reen_cbk_group = nh_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
                     vm_.viz_timer = nh_->create_wall_timer(
                         std::chrono::milliseconds(cbk_dt_ms),
                         std::bind(&ROGMapROS::vizCallback, this),
-                        vm_.viz_reen_cbk_group
+                        callback_group_
                     );
                 }
             }
@@ -364,20 +356,16 @@ namespace rog_map {
             vm_.mkr_arr_pub = nh_->create_publisher<visualization_msgs::msg::MarkerArray>("rog_map/map_bound", qos);
 
             if (cfg_.ros_callback_en) {
-                rc_.odom_me_cbk_group = nh_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-                rc_.cloud_me_cbk_group = nh_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
                 rclcpp::SubscriptionOptions so;
-                so.callback_group = rc_.odom_me_cbk_group;
+                so.callback_group = callback_group_;
                 rc_.odom_sub = nh_->create_subscription<nav_msgs::msg::Odometry>(
                     cfg_.odom_topic, qos, std::bind(&ROGMapROS::odomCallback, this, std::placeholders::_1), so);
-                so.callback_group = rc_.cloud_me_cbk_group;
                 rc_.cloud_sub = nh_->create_subscription<sensor_msgs::msg::PointCloud2>(
                     cfg_.cloud_topic, qos, std::bind(&ROGMapROS::cloudCallback, this, std::placeholders::_1), so);
-                rc_.update_cbk_group = nh_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
                 rc_.update_timer = nh_->create_wall_timer(
                     std::chrono::milliseconds(1), // 0.001秒，即1毫秒
                     std::bind(&ROGMapROS::updateCallback, this),
-                    rc_.update_cbk_group
+                    callback_group_
                 );
             }
         }
@@ -401,8 +389,8 @@ namespace rog_map {
             //Publish Bounding box
             int id = 0;
             visualization_msgs::msg::Marker line_strip;
-            line_strip.header.stamp = rclcpp::Time(stamp);
-            line_strip.header.frame_id = namespace_ + "/map";
+            line_strip.header.stamp = rclcpp::Time(static_cast<int64_t>(stamp * 1e9));
+            line_strip.header.frame_id = cfg_.target_frame;
             line_strip.action = visualization_msgs::msg::Marker::ADD;
             line_strip.ns = ns;
             line_strip.pose.orientation.w = 1.0;
@@ -466,8 +454,8 @@ namespace rog_map {
                                   const double& size = 0.6,
                                   const int& id = -1) {
             visualization_msgs::msg::Marker marker;
-            marker.header.frame_id = namespace_ + "/map";
-            marker.header.stamp = rclcpp::Time(stamp);
+            marker.header.frame_id = cfg_.target_frame;
+            marker.header.stamp = rclcpp::Time(static_cast<int64_t>(stamp * 1e9));
             marker.action = visualization_msgs::msg::Marker::ADD;
             marker.pose.orientation.w = 1.0;
             marker.ns = ns.c_str();
@@ -502,8 +490,8 @@ namespace rog_map {
             if (isnan(pt.x()) || isnan(pt.y()) || isnan(pt.z())) {
                 return;
             }
-            marker_ball.header.frame_id = namespace_ + "/map";
-            marker_ball.header.stamp = rclcpp::Time(stamp);
+            marker_ball.header.frame_id = cfg_.target_frame;
+            marker_ball.header.stamp = rclcpp::Time(static_cast<int64_t>(stamp * 1e9));
             marker_ball.ns = ns.c_str();
             marker_ball.id = id >= 0 ? id : cnt++;
             marker_ball.action = visualization_msgs::msg::Marker::ADD;
@@ -525,8 +513,8 @@ namespace rog_map {
             // add test
             if (print_ns) {
                 visualization_msgs::msg::Marker marker;
-                marker.header.frame_id = namespace_ + "/map";
-                marker.header.stamp = rclcpp::Time(stamp);
+                marker.header.frame_id = cfg_.target_frame;
+                marker.header.stamp = rclcpp::Time(static_cast<int64_t>(stamp * 1e9));
                 marker.action = visualization_msgs::msg::Marker::ADD;
                 marker.pose.orientation.w = 1.0;
                 marker.ns = ns + "_text";

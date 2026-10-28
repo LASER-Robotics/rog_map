@@ -51,9 +51,10 @@ rog_map:
   #  else user should call function [updateMap] to update the map.
   ros_callback:
     enable: true
-    cloud_topic: "/uav1/livox/lidar"
+    target_frame: ""  # Use the odometry frame.
+    cloud_topic: "livox/lidar"
     # cloud_topic: "/uav1/fast_lio/laser_map"
-    odom_topic: "/uav1/estimation_manager/estimation"
+    odom_topic: "estimation_manager/estimation"
     # odom_topic: "/uav1/fast_lio/odometry"
     odom_timeout: 2.0
 

@@ -99,6 +99,8 @@ namespace rog_map {
         void updateProbMap(const PointCloud &cloud, const Pose &pose);
 
     protected:
+        bool initialized_{false};
+        bool first_frame_{true};
         rog_map::Config cfg_;
         InfMap::Ptr inf_map_;
         FreeCntMap::Ptr fcnt_map_;

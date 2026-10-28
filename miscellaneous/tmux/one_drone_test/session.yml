@@ -2,7 +2,7 @@ name: simulation
 root: ./
 startup_window: rog_map
 # pre_window: export UAV_NAME=uav1; export UAV_TYPE=x500
-pre_window: export UAV_NAME=uav1; export UAV_TYPE=lr7pro
+pre_window: export UAV_NAME=uav1; export UAV_TYPE=lr7pro; export REAL_UAV=false
 windows:
   - spawn:
       layout: even-horizontal
@@ -12,23 +12,27 @@ windows:
   - api:
       layout: even-horizontal
       panes:
-        - sleep 1; ros2 launch laser_uav_px4_api api.launch.py 
-        - sleep 1; ros2 run laser_uav_simulation autostart.py 
+        - sleep 1; ros2 launch laser_uav_hw_api px4_api.launch.py real_uav:=false use_sim_time:=true
+        - sleep 1; ros2 run laser_uav_simulation autostart.py
   - estimation_manager:
       layout: tiled
       panes:
-          - sleep 1; ros2 launch laser_uav_managers estimation_manager.launch.py
+          - sleep 1; ros2 launch laser_uav_managers estimation_manager.launch.py use_sim_time:=true
   - control_manager:
       layout: tiled
       panes:
-        - sleep 1; ros2 launch laser_uav_managers control_manager.launch.py
-        - 'history -s ros2 service call /$UAV_NAME/px4_api/arm std_srvs/srv/Trigger {}'
+        - sleep 1; ros2 launch laser_uav_managers control_manager.launch.py use_sim_time:=true
+        - 'history -s ros2 service call /$UAV_NAME/hw_api/arm std_srvs/srv/Trigger {}'
         - 'history -s ros2 service call /$UAV_NAME/control_manager/takeoff std_srvs/srv/Trigger {}'
         - 'history -s ros2 service call /$UAV_NAME/control_manager/land std_srvs/srv/Trigger {}'
+  - planning_manager:
+      layout: tiled
+      panes:
+        - sleep 1; ros2 launch laser_uav_managers planning_manager.launch.py use_sim_time:=true
   - free_cmd:
       layout: tiled
       panes:
-        - 'history -s ros2 topic pub -1 /$UAV_NAME/control_manager/goto laser_msgs/msg/PoseWithHeading \"{position: {x: 0.0, y: 0.0, z: 1.5}, heading: 0.0}\"'
+        - 'history -s ros2 topic pub -1 /$UAV_NAME/planning_manager/goto laser_msgs/msg/PoseWithHeading \"{position: {x: 0.0, y: 0.0, z: 1.5}, heading: 0.0}\"'
   - estimation:
       layout: even-horizontal
       panes:
@@ -36,6 +40,6 @@ windows:
   - rog_map:
       layout: even-horizontal
       panes:
-        - sleep 3; ros2 launch rog_map run_rog_map.launch.py rog_map_config:=ogm_map.yaml
+        - sleep 3; ros2 launch rog_map run_rog_map.launch.py rog_map_config:=ogm_map.yaml use_sim_time:=true
         - ros2 run rviz_republisher rviz_republisher
 

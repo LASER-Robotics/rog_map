@@ -96,7 +96,6 @@ def launch_setup(context: launch.LaunchContext, ld):
         name='run_rog_map',
 
         parameters=[
-            {'uav_name': uav_name},
             {'use_sim_time': use_sim_time},
             {'config_path': PathJoinSubstitution([
                 FindPackageShare('rog_map'),

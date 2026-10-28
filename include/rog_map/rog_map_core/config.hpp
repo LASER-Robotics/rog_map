@@ -79,15 +79,6 @@ namespace rog_map {
 #endif
 #endif
 
-            
-/* Laser Robotics params //{ */
-            loader.LoadParam(name_space + "/ros_callback/target_frame", target_frame, std::string("target_frame"));
-//}
-
-
-
-
-
             loader.LoadParam(name_space + "/esdf/resolution", esdf_resolution, 0.2);
             loader.LoadParam(name_space + "/esdf/enable", esdf_en, false);
             vector<double> temp_esdf_update_box;
@@ -123,6 +114,7 @@ namespace rog_map {
             loader.LoadParam(name_space + "/frontier_extraction_en", frontier_extraction_en, false);
 
             loader.LoadParam(name_space + "/ros_callback/enable", ros_callback_en, false);
+            loader.LoadParam(name_space + "/ros_callback/target_frame", target_frame, string(""));
             loader.LoadParam(name_space + "/ros_callback/cloud_topic", cloud_topic, string("/cloud_registered"));
             loader.LoadParam(name_space + "/ros_callback/odom_topic", odom_topic, string("/lidar_slam/odom"));
             loader.LoadParam(name_space + "/ros_callback/odom_timeout", odom_timeout, 0.05);
